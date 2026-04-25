@@ -1,4 +1,6 @@
-import { Eye, ExternalLink, Shield, Flame, Skull, Crown } from "lucide-react";
+import { Eye, ExternalLink, Shield, Flame, Star, User } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useWatchlist } from "../../lib/useWatchlist";
 
 function getScoreStyle(score) {
   if (score >= 85) {
@@ -123,6 +125,10 @@ export default function FindingCard(props) {
   const officialCatBadge = getOfficialCategoryBadge(finding.official_category);
   const detectedEmojis = finding.detected_emojis || [];
 
+  const watchlist = useWatchlist();
+  const starred = props.starred != null ? props.starred : watchlist.has(finding.id);
+  const toggleStar = props.onToggleStar || (() => watchlist.toggle(finding.id));
+
   return (
     <div className="group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 hover:border-fuchsia-500/40 transition-all duration-200 shadow-lg">
       
@@ -239,12 +245,34 @@ export default function FindingCard(props) {
 
           <div className="flex flex-wrap gap-2 mt-3">
             <button
-              onClick={function() { onOpenDossier(finding); }}
+              onClick={function() { onOpenDossier && onOpenDossier(finding); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-fuchsia-300 text-sm rounded-lg border border-fuchsia-500/30 transition"
             >
               <Eye size={14} />
               Ver Dossier
             </button>
+            <button
+              onClick={toggleStar}
+              className={"flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition " + (
+                starred
+                  ? "bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border-yellow-500/40"
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+              )}
+              title={starred ? "Quitar de watchlist" : "Añadir a watchlist"}
+            >
+              <Star size={14} fill={starred ? "currentColor" : "none"} />
+              {starred ? "En watchlist" : "Watchlist"}
+            </button>
+            {finding.author_name ? (
+              <Link
+                to={"/targets/" + encodeURIComponent(finding.author_name)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded-lg border border-slate-700 transition"
+                title="Ver perfil del objetivo"
+              >
+                <User size={14} />
+                Perfil
+              </Link>
+            ) : null}
             {finding.video_url ? (
               <a
                 href={finding.video_url}

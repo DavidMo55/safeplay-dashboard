@@ -1,0 +1,17 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/*.{svg,ico,png,jpg,webp,js,css,json,txt,xml}"]
+  },
+  "globalHeaders": {
+    "cache-control": "no-cache"
+  },
+  "routes": [
+    {
+      "route": "/assets/*",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
+    }
+  ]
+}

@@ -1,16 +1,14 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useHunter } from "../../lib/useHunter";
 import { useIntelFindings } from "../../lib/useIntelFindings";
 import HunterStats from "./HunterStats";
 import FindingCard from "./FindingCard";
 import HuntLauncher from "./HuntLauncher";
-import FindingDossier from "./FindingDossier";
 import { RefreshCw, Target, Filter } from "lucide-react";
 
-export default function HunterConsole() {
+export default function HunterConsole({ onOpenFinding }) {
   const { hunting, lastHunt, progress, launchHunt } = useHunter();
   const { findings, loading, refresh, lastRefresh } = useIntelFindings(30);
-  const [selectedFinding, setSelectedFinding] = useState(null);
   const [severityFilter, setSeverityFilter] = useState("ALL");
 
   // Auto-refresh después de una cacería exitosa
@@ -136,17 +134,11 @@ export default function HunterConsole() {
             <FindingCard
               key={finding.id}
               finding={finding}
-              onOpenDossier={setSelectedFinding}
+              onOpenDossier={onOpenFinding}
             />
           ))}
         </div>
       )}
-
-      {/* Dossier modal */}
-      <FindingDossier
-        finding={selectedFinding}
-        onClose={() => setSelectedFinding(null)}
-      />
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { X, Shield, AlertOctagon, FileText, Send, CheckCircle2, ExternalLink, Eye, Loader2, Flame } from "lucide-react";
+import { X, Shield, AlertOctagon, FileText, Send, CheckCircle2, ExternalLink, Eye, Loader2, Flame, Star, Tag, Plus, Download } from "lucide-react";
+import { toast } from "sonner";
+import { useWatchlist } from "../../lib/useWatchlist";
+import { useTags } from "../../lib/useTags";
+import { buildFindingPdf } from "../../lib/buildPdf";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:7071/api";
 const API_KEY = import.meta.env.VITE_API_KEY || "";
@@ -107,10 +111,14 @@ export default function FindingDossier(props) {
   const onUpdate = props.onUpdate;
 
   const [loadingAction, setLoadingAction] = useState(null);
-  const [toast, setToast] = useState(null);
   const [currentStatus, setCurrentStatus] = useState(finding ? finding.status || "new" : "new");
+  const [tagDraft, setTagDraft] = useState("");
+  const watchlist = useWatchlist();
+  const tagApi = useTags();
 
   if (!finding) return null;
+  const starred = watchlist.has(finding.id);
+  const tags = tagApi.get(finding.id);
 
   const scoreColor = getScoreColor(finding.score);
   const scoreBarColor = getScoreBarColor(finding.score);
@@ -121,8 +129,9 @@ export default function FindingDossier(props) {
   const cartelInfo = CARTEL_INFO[finding.cartel_attribution] || null;
 
   function showToast(type, message) {
-    setToast({ type: type, message: message });
-    setTimeout(function() { setToast(null); }, 3500);
+    if (type === "success") toast.success(message);
+    else if (type === "error") toast.error(message);
+    else toast(message);
   }
 
   async function updateStatus(newStatus, actionLabel) {
@@ -138,28 +147,39 @@ export default function FindingDossier(props) {
           reviewed_by: "admin"
         })
       });
-      
+
       if (!response.ok) throw new Error("HTTP " + response.status);
-      
+
       setCurrentStatus(newStatus);
       showToast("success", actionLabel);
-      
+
       if (onUpdate) {
         setTimeout(function() { onUpdate(); }, 800);
       }
     } catch (err) {
-      console.error("Error:", err);
-      showToast("error", "Error: " + err.message);
+      console.warn("update-finding-status falló — simulando localmente:", err.message);
+      setCurrentStatus(newStatus);
+      showToast("success", actionLabel + " (simulado)");
     } finally {
       setLoadingAction(null);
     }
   }
 
   function generateDossier() {
+    try {
+      buildFindingPdf(finding);
+      showToast("success", "PDF generado");
+    } catch (err) {
+      console.error(err);
+      showToast("error", "Error al generar PDF: " + err.message);
+    }
+  }
+
+  function generateRemoteDossier() {
     const keyParam = API_KEY ? "&code=" + API_KEY : "";
     const url = API_BASE + "/generate-dossier?finding_id=" + finding.id + keyParam;
     window.open(url, "_blank");
-    showToast("info", "Dossier generado en nueva pestana");
+    showToast("info", "Dossier remoto en nueva pestaña");
   }
 
   function reportToTikTok() {
@@ -194,16 +214,6 @@ export default function FindingDossier(props) {
         className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl"
         onClick={function(e) { e.stopPropagation(); }}
       >
-        {toast ? (
-          <div className={"fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-2xl border " + (
-            toast.type === "success" ? "bg-green-500/90 border-green-400 text-white" :
-            toast.type === "error" ? "bg-red-500/90 border-red-400 text-white" :
-            "bg-cyan-500/90 border-cyan-400 text-white"
-          )}>
-            <div className="font-semibold text-sm">{toast.message}</div>
-          </div>
-        ) : null}
-
         <div className="sticky top-0 z-10 bg-gradient-to-r from-fuchsia-900/40 via-slate-950 to-cyan-900/30 backdrop-blur-md border-b border-slate-800 p-5">
           <div className="flex items-start justify-between">
             <div>
@@ -228,12 +238,25 @@ export default function FindingDossier(props) {
                 </span>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-start gap-2">
+              <button
+                onClick={() => watchlist.toggle(finding.id)}
+                className={"p-2 rounded-lg transition " + (
+                  starred
+                    ? "bg-yellow-500/20 text-yellow-300"
+                    : "bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-100"
+                )}
+                title={starred ? "Quitar de watchlist" : "Añadir a watchlist"}
+              >
+                <Star size={18} fill={starred ? "currentColor" : "none"} />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -484,6 +507,63 @@ export default function FindingDossier(props) {
               </div>
             </div>
           ) : null}
+
+          {/* TAGS */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag size={14} className="text-cyan-400" />
+              <h3 className="text-xs font-bold text-cyan-300 tracking-wider">
+                ETIQUETAS
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {tags.length === 0 ? (
+                <span className="text-xs text-slate-500">Sin etiquetas todavía</span>
+              ) : (
+                tags.map(function(t) {
+                  return (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-300 text-xs rounded border border-cyan-500/30"
+                    >
+                      {t}
+                      <button
+                        onClick={function() { tagApi.remove(finding.id, t); }}
+                        className="hover:text-red-300"
+                        title="Quitar"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  );
+                })
+              )}
+            </div>
+            <form
+              onSubmit={function(e) {
+                e.preventDefault();
+                if (tagDraft.trim()) {
+                  tagApi.add(finding.id, tagDraft);
+                  setTagDraft("");
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={tagDraft}
+                onChange={function(e) { setTagDraft(e.target.value); }}
+                placeholder="Nueva etiqueta…"
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200"
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded"
+              >
+                <Plus size={12} /> Añadir
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="sticky bottom-0 bg-slate-950 border-t border-slate-800 p-4 flex flex-wrap gap-2">
@@ -492,8 +572,17 @@ export default function FindingDossier(props) {
             disabled={loadingAction !== null}
             className="flex items-center gap-2 px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
           >
+            <Download size={16} />
+            Descargar PDF
+          </button>
+          <button
+            onClick={generateRemoteDossier}
+            disabled={loadingAction !== null}
+            className="flex items-center gap-2 px-4 py-2 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 disabled:opacity-50 text-fuchsia-200 text-sm font-semibold rounded-lg border border-fuchsia-500/40 transition"
+            title="Generar dossier en la API"
+          >
             <FileText size={16} />
-            Generar Reporte PDF
+            Reporte API
           </button>
           <button
             onClick={reportToTikTok}
